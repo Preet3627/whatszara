@@ -227,8 +227,8 @@ pub fn run() {
                     let child = Command::new("go")
                         .args(["run", "main.go"])
                         .current_dir(&bridge_path)
-                        .stdout(Stdio::null())
-                        .stderr(Stdio::null())
+                        .stdout(Stdio::inherit())
+                        .stderr(Stdio::inherit())
                         .spawn()
                         .ok();
                     let state = app.state::<BridgeProcess>();
