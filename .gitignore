@@ -3,12 +3,29 @@ claude_desktop_config.json
 whatsapp.log
 whatsapp-bridge/store/
 
-# Python (we don't use Python anymore, but just in case)
+# Python — eliminated from Whatszara, these are dead files
 __pycache__/
+*.py
 *.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
 *.egg-info/
 .venv/
 venv/
+Pipfile*
+requirements*.txt
+pyproject.toml
+setup.py
+setup.cfg
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.tox/
 
 # Rust / Tauri
 desktop-app/src-tauri/target/
