@@ -153,12 +153,4 @@ pub fn list_all_contacts() -> Result<Vec<ContactInfo>, String> {
     Ok(seen.into_iter().map(|(jid, name)| ContactInfo { jid, name, last_active: None }).collect())
 }
 
-pub fn session_db_path() -> PathBuf {
-    let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    p.pop();
-    p.pop();
-    p.push("whatsapp-bridge");
-    p.push("store");
-    p.push("whatsapp.db");
-    p
-}
+

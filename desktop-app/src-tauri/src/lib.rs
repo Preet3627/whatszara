@@ -14,6 +14,7 @@ struct BridgeProcess {
     child: StdMutex<Option<Child>>,
     qr_code: StdMutex<String>,
     output: StdMutex<String>,
+    store_dir: StdMutex<Option<std::path::PathBuf>>,
 }
 
 #[tauri::command]
@@ -230,8 +231,11 @@ async fn check_bridge(state: tauri::State<'_, Arc<BridgeProcess>>) -> Result<Str
         let status = if connected {
             if !was_connected {
                 state.output.lock().unwrap().push_str("CONNECTED_SAVED\n");
-                if let Ok(data) = std::fs::read(whatszara::whatsapp::session_db_path()) {
-                    let _ = save_keychain(&data, "whatszara-wa-session");
+                let db_path = state.store_dir.lock().unwrap().as_ref().map(|p| p.join("whatsapp.db"));
+                if let Some(ref path) = db_path {
+                    if let Ok(data) = std::fs::read(path) {
+                        let _ = save_keychain(&data, "whatszara-wa-session");
+                    }
                 }
             }
             "connected"
@@ -260,7 +264,9 @@ async fn logout_bridge(state: tauri::State<'_, Arc<BridgeProcess>>) -> Result<St
         qr.clear();
     }
     let _ = delete_keychain("whatszara-wa-session");
-    let _ = std::fs::remove_file(whatszara::whatsapp::session_db_path());
+    if let Some(store) = state.store_dir.lock().unwrap().as_ref() {
+        let _ = std::fs::remove_file(store.join("whatsapp.db"));
+    }
     Ok(serde_json::json!({"success": true}).to_string())
 }
 
@@ -448,6 +454,7 @@ pub fn run() {
             child: StdMutex::new(None),
             qr_code: StdMutex::new(String::new()),
             output: StdMutex::new(String::new()),
+            store_dir: StdMutex::new(None),
         }))
         .invoke_handler(tauri::generate_handler![
             get_status,
@@ -481,60 +488,66 @@ pub fn run() {
         .setup(|app| {
             #[cfg(desktop)]
             {
-                let bridge_dir = app.path().resource_dir()
-                    .map(|p| p.join("../../whatsapp-bridge"))
-                    .unwrap_or_else(|_| std::path::PathBuf::from("../whatsapp-bridge"));
-
-                let bridge_path = if cfg!(debug_assertions) {
-                    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                // Determine bridge binary, args, and working directory
+                let (bridge_cmd, bridge_args, bridge_cwd): (String, Vec<String>, std::path::PathBuf) = if cfg!(debug_assertions) {
+                    let repo_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                         .join("../../whatsapp-bridge")
                         .canonicalize()
-                        .unwrap_or(bridge_dir.clone())
+                        .unwrap_or_else(|_| std::path::PathBuf::from("../whatsapp-bridge"));
+                    ("go".into(), vec!["run".into(), "main.go".into()], repo_path)
                 } else {
-                    bridge_dir
+                    let exe_name = if cfg!(target_os = "windows") { "whatsapp-bridge-windows.exe" }
+                        else if cfg!(target_os = "linux") { "whatsapp-bridge-linux" }
+                        else { "whatsapp-bridge-darwin" };
+                    let exe = app.path().resource_dir()
+                        .map(|p| p.join("bin").join(exe_name))
+                        .unwrap_or_else(|_| std::path::PathBuf::from(exe_name));
+                    let data_dir = app.path().app_data_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+                    (exe.to_string_lossy().to_string(), vec![], data_dir)
                 };
 
-                if bridge_path.join("main.go").exists() {
-                    if let Ok(data) = load_keychain("whatszara-wa-session") {
-                        let db_path = bridge_path.join("store").join("whatsapp.db");
-                        if let Some(parent) = db_path.parent() {
-                            let _ = std::fs::create_dir_all(parent);
-                        }
-                        let _ = std::fs::write(&db_path, &data);
-                    }
+                // Restore session from keychain
+                if let Ok(data) = load_keychain("whatszara-wa-session") {
+                    let store_dir = bridge_cwd.join("store");
+                    let _ = std::fs::create_dir_all(&store_dir);
+                    let _ = std::fs::write(store_dir.join("whatsapp.db"), &data);
+                }
 
-                    let bridge_state = app.state::<Arc<BridgeProcess>>();
-                    match Command::new("go")
-                        .args(["run", "main.go"])
-                        .current_dir(&bridge_path)
-                        .stdout(Stdio::piped())
-                        .stderr(Stdio::inherit())
-                        .spawn()
-                    {
-                        Ok(mut child) => {
-                            if let Some(stdout) = child.stdout.take() {
-                                let state_clone = Arc::clone(&*bridge_state);
-                                std::thread::spawn(move || {
-                                    let reader = std::io::BufReader::new(stdout);
-                                    for line in reader.lines() {
-                                        if let Ok(line) = line {
-                                            let mut output = state_clone.output.lock().unwrap();
-                                            output.push_str(&line);
-                                            output.push('\n');
-                                            if line.starts_with("QR_CODE:") {
-                                                let code = line.trim_start_matches("QR_CODE:").to_string();
-                                                *state_clone.qr_code.lock().unwrap() = code;
-                                            }
+                let bridge_state = app.state::<Arc<BridgeProcess>>();
+                {
+                    let mut store = bridge_state.store_dir.lock().unwrap();
+                    *store = Some(bridge_cwd.join("store"));
+                }
+                match Command::new(&bridge_cmd)
+                    .args(&bridge_args)
+                    .current_dir(&bridge_cwd)
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::inherit())
+                    .spawn()
+                {
+                    Ok(mut child) => {
+                        if let Some(stdout) = child.stdout.take() {
+                            let state_clone = Arc::clone(&*bridge_state);
+                            std::thread::spawn(move || {
+                                let reader = std::io::BufReader::new(stdout);
+                                for line in reader.lines() {
+                                    if let Ok(line) = line {
+                                        let mut output = state_clone.output.lock().unwrap();
+                                        output.push_str(&line);
+                                        output.push('\n');
+                                        if line.starts_with("QR_CODE:") {
+                                            let code = line.trim_start_matches("QR_CODE:").to_string();
+                                            *state_clone.qr_code.lock().unwrap() = code;
                                         }
                                     }
-                                });
-                            }
-                            *bridge_state.child.lock().unwrap() = Some(child);
+                                }
+                            });
                         }
-                        Err(e) => {
-                            let mut output = bridge_state.output.lock().unwrap();
-                            output.push_str(&format!("Failed to start bridge: {}\n", e));
-                        }
+                        *bridge_state.child.lock().unwrap() = Some(child);
+                    }
+                    Err(e) => {
+                        let mut output = bridge_state.output.lock().unwrap();
+                        output.push_str(&format!("Failed to start bridge: {}\n", e));
                     }
                 }
 
