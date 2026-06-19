@@ -222,8 +222,14 @@
               </div>
               <div id="chat-conversation" class="hidden">
                 <div class="chat-header">
-                  <h3 id="chat-contact-name">Contact Name</h3>
-                  <span id="chat-contact-jid" class="text-muted"></span>
+                  <div class="chat-header-info">
+                    <h3 id="chat-contact-name">Contact Name</h3>
+                    <span id="chat-contact-jid" class="text-muted"></span>
+                  </div>
+                  <button class="btn btn-small" id="chat-refresh" title="Refresh contacts & messages">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    Refresh
+                  </button>
                 </div>
                 <div id="chat-messages" class="chat-messages"></div>
                 <div id="chat-actions" class="chat-actions-section">

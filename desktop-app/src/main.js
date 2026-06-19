@@ -10,11 +10,12 @@ document.querySelectorAll(".nav-item").forEach((btn) => {
     document.querySelectorAll(".view").forEach((v) => v.classList.add("hidden"));
     const target = document.getElementById(`view-${view}`);
     if (target) target.classList.remove("hidden");
-    if (view === "dashboard") refreshDashboard();
-    if (view === "permissions") refreshContactsTable();
-    if (view === "chat") refreshChatContacts();
-    if (view === "actions") refreshActionLog();
-    if (view === "providers") refreshModels();
+    if (view === "dashboard") { stopChatPolling(); refreshDashboard(); }
+    if (view === "permissions") { stopChatPolling(); refreshContactsTable(); }
+    if (view === "chat") { refreshChatContacts(); startChatPolling(); }
+    if (view === "actions") { stopChatPolling(); refreshActionLog(); }
+    if (view === "providers") { stopChatPolling(); refreshModels(); }
+    if (view === "settings") { stopChatPolling(); }
   });
 });
 
@@ -254,13 +255,21 @@ document.getElementById("active-provider-select")?.addEventListener("change", as
 
 // ── Chat View ──
 let chatContacts = [];
+let chatAllowlist = [];
 let selectedChatJid = null;
+let chatPollInterval = null;
 
 async function refreshChatContacts() {
   try {
-    const raw = await invoke("list_contacts");
-    chatContacts = JSON.parse(raw);
-    renderChatContacts(chatContacts);
+    const [contactsRaw, policyRaw] = await Promise.all([
+      invoke("list_contacts"),
+      invoke("get_policy"),
+    ]);
+    const contacts = JSON.parse(contactsRaw);
+    const policy = JSON.parse(policyRaw);
+    chatAllowlist = policy.allowlist || [];
+    chatContacts = contacts;
+    renderChatContacts(contacts);
   } catch (e) {
     console.error("Failed to load chat contacts", e);
   }
@@ -269,7 +278,12 @@ async function refreshChatContacts() {
 function renderChatContacts(contacts) {
   const list = document.getElementById("chat-contact-list");
   const search = (document.getElementById("chat-search")?.value || "").toLowerCase();
-  list.innerHTML = contacts
+  const sorted = [...contacts].sort((a, b) => {
+    const aAllowed = chatAllowlist.includes(a.jid) ? 1 : 0;
+    const bAllowed = chatAllowlist.includes(b.jid) ? 1 : 0;
+    return bAllowed - aAllowed;
+  });
+  list.innerHTML = sorted
     .filter((c) => {
       if (!search) return true;
       return c.jid.toLowerCase().includes(search) || c.name.toLowerCase().includes(search);
@@ -277,11 +291,12 @@ function renderChatContacts(contacts) {
     .map(
       (c) => `
     <button class="chat-contact-item ${selectedChatJid === c.jid ? "active" : ""}" data-jid="${escHtml(c.jid)}">
-      <div class="avatar">${(c.name || "?")[0].toUpperCase()}</div>
+      <div class="avatar">${(c.name || "?")[0].toUpperCase()}${chatAllowlist.includes(c.jid) ? '<span class="allowlisted-dot"></span>' : ""}</div>
       <div class="contact-info">
         <div class="contact-name">${escHtml(c.name || "Unknown")}</div>
         <div class="contact-jid-sm">${escHtml(c.jid)}</div>
       </div>
+      ${chatAllowlist.includes(c.jid) ? '<span class="allowlisted-badge">Allowlisted</span>' : ""}
     </button>`
     )
     .join("");
@@ -302,6 +317,11 @@ document.getElementById("chat-contact-list")?.addEventListener("click", async (e
   document.getElementById("chat-placeholder").classList.add("hidden");
   document.getElementById("chat-conversation").classList.remove("hidden");
   await loadMessages(selectedChatJid);
+});
+
+document.getElementById("chat-refresh")?.addEventListener("click", async () => {
+  await refreshChatContacts();
+  if (selectedChatJid) await loadMessages(selectedChatJid);
 });
 
 async function loadMessages(jid) {
@@ -327,6 +347,21 @@ async function loadMessages(jid) {
     container.innerHTML = '<p class="text-muted">Failed to load messages</p>';
   }
   actionsList.innerHTML = '<p class="text-muted">No pending actions</p>';
+}
+
+function startChatPolling() {
+  if (chatPollInterval) return;
+  chatPollInterval = setInterval(async () => {
+    await refreshChatContacts();
+    if (selectedChatJid) await loadMessages(selectedChatJid);
+  }, 5000);
+}
+
+function stopChatPolling() {
+  if (chatPollInterval) {
+    clearInterval(chatPollInterval);
+    chatPollInterval = null;
+  }
 }
 
 // ── Action Log ──
@@ -400,4 +435,5 @@ window.addEventListener("DOMContentLoaded", () => {
 
 window.addEventListener("beforeunload", () => {
   if (bridgePollInterval) clearInterval(bridgePollInterval);
+  stopChatPolling();
 });
