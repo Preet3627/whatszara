@@ -75,7 +75,7 @@ pub fn search_contacts(query: &str) -> Result<Vec<Contact>, String> {
 pub fn list_chats(limit: usize) -> Result<Vec<Chat>, String> {
     let conn = connect()?;
     let mut stmt = conn
-        .prepare("SELECT jid, name, last_message, last_active FROM chats ORDER BY last_active DESC LIMIT ?1")
+        .prepare("SELECT jid, name, NULL, last_message_time FROM chats ORDER BY last_message_time DESC LIMIT ?1")
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map([&(limit as i64)], |row| {
@@ -130,7 +130,7 @@ pub fn list_all_contacts() -> Result<Vec<ContactInfo>, String> {
             }
         }
     }
-    if let Ok(mut stmt) = conn.prepare("SELECT jid, COALESCE(name, ''), last_active FROM chats ORDER BY last_active DESC") {
+    if let Ok(mut stmt) = conn.prepare("SELECT jid, COALESCE(name, ''), last_message_time FROM chats ORDER BY last_message_time DESC") {
         if let Ok(rows) = stmt.query_map([], |row| {
             Ok(ContactInfo {
                 jid: row.get(0)?,
