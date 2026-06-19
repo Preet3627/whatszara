@@ -1,22 +1,21 @@
-# Original whatsapp-mcp
 *.db
 claude_desktop_config.json
 whatsapp.log
+whatsapp-bridge/store/
 
-# Python
+# Python (we don't use Python anymore, but just in case)
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
+*.egg-info/
 .venv/
 venv/
-env/
-*.egg-info/
-dist/
-build/
 
 # Rust / Tauri
 desktop-app/src-tauri/target/
+desktop-app/src-tauri/bin/*.exe
+desktop-app/src-tauri/bin/*.dll
+desktop-app/src-tauri/bin/whatsapp-bridge
+desktop-app/src-tauri/bin/whatsapp-bridge-*
 *.rs.bk
 
 # Node

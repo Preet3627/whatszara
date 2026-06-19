@@ -4,6 +4,8 @@ Control your desktop from anywhere using WhatsApp messages. Talk to an LLM throu
 
 Built on top of **[whatsapp-mcp](https://github.com/lharries/whatsapp-mcp)** by Luke Harries, scaled from a simple MCP server into a full desktop automation platform.
 
+**No Python required.** Everything is compiled into a single Tauri desktop app (Rust) + Go bridge for WhatsApp. No interpreters, no virtualenvs, no pip.
+
 ## How It Works
 
 ```
@@ -40,25 +42,29 @@ WhatsApp Message ──▶ Orchestrator ──▶ LLM (Ollama/Claude/Groq/etc.)
 
 ## Features
 
-### ✅ Completed (Phase 1)
-- [x] Project scaffold and structure
-- [x] Derived from whatsapp-mcp (MIT licensed, attribution maintained)
-- [x] Multi-LLM provider abstraction (Ollama, Claude, Groq, Grok, Gemini, Vercel AI SDK)
+### ✅ Completed
+- [x] Python eliminated — everything in Rust + Go (zero Python dependency)
+- [x] Multi-LLM provider abstraction (Ollama, Claude, Groq, Grok, Gemini, Vercel AI SDK) in Rust
 - [x] Live model list fetching for Ollama
-- [x] Basic orchestrator with message routing
-- [x] Tauri desktop app shell
-- [x] Permission engine scaffold with risk profiles (High/Medium/Low)
+- [x] Tauri desktop app with system tray
+- [x] Permission engine with 3 risk profiles (High/Medium/Low)
+- [x] Shell command executor with blocklist
+- [x] App launcher with aliases
+- [x] Volume control + media playback (macOS)
+- [x] Desktop image scanner
+- [x] Reversible undo journal for all actions
+- [x] WhatsApp MCP tools in Rust (SQLite reads + HTTP to Go bridge)
+- [x] Setup.sh one-click bootstrap
+- [x] Multi-platform CI + Release workflows (GitHub Actions)
+- [x] MIT License with whatsapp-mcp attribution
 
 ### 🔄 In Progress
-- [ ] System action tools (shell, open apps, volume control, media playback)
-- [ ] Desktop file scanning and bulk image sending
-- [ ] reCAPTCHA + image-to-text verification integration
-- [ ] Undo/reversible action journal
+- [ ] Image-to-text + reCAPTCHA verification integration
 - [ ] WhatsApp incoming message webhook
-
-### 📋 Planned
 - [ ] Permission configuration GUI
 - [ ] Action history viewer
+
+### 📋 Planned
 - [ ] Scheduled/automated actions
 - [ ] Multiple WhatsApp number support
 - [ ] Voice message transcription
@@ -72,88 +78,90 @@ WhatsApp Message ──▶ Orchestrator ──▶ LLM (Ollama/Claude/Groq/etc.)
 ├──────────────────────────────────────────────────────────────────┤
 │                                                                   │
 │  ┌─────────────────────┐      ┌──────────────────────────────┐   │
-│  │   WhatsApp Layer     │      │    Orchestrator               │   │
-│  │   (whatsapp-mcp)     │─────▶│                               │   │
-│  │                      │      │  ┌─────────────────────────┐  │   │
-│  │  ┌───────────────┐   │      │  │  LLM Provider Layer     │  │   │
-│  │  │ Go Bridge      │   │      │  │  - Ollama (live list)   │  │   │
-│  │  │ (whatsmeow)    │   │      │  │  - Claude               │  │   │
-│  │  └───────┬───────┘   │      │  │  - Groq                 │  │   │
-│  │          │           │      │  │  - Grok                 │  │   │
-│  │  ┌───────▼───────┐   │      │  │  - Gemini               │  │   │
-│  │  │ SQLite Store   │   │      │  │  - Vercel AI SDK        │  │   │
-│  │  └───────┬───────┘   │      │  └─────────────────────────┘  │   │
-│  │          │           │      │                               │   │
-│  │  ┌───────▼───────┐   │      │  ┌─────────────────────────┐  │   │
-│  │  │ Python MCP     │   │      │  │  Permission Engine      │  │   │
-│  │  │ Server         │   │      │  │  - Risk profiles        │  │   │
-│  │  └───────┬───────┘   │      │  │  - reCAPTCHA v3          │  │   │
-│  │          │           │      │  │  - Image-to-text CAPTCHA │  │   │
-│  └──────────┼───────────┘      │  └─────────────────────────┘  │   │
-│             │                  │                               │   │
-│             │                  │  ┌─────────────────────────┐  │   │
-│             │                  │  │  Action Engine           │  │   │
-│             │                  │  │  - Shell commands        │  │   │
-│             │                  │  │  - App launcher          │  │   │
-│             │                  │  │  - Volume/media control  │  │   │
-│             │                  │  │  - Desktop file access   │  │   │
-│             │                  │  │  - Undo journal          │  │   │
-│             │                  │  └─────────────────────────┘  │   │
-│             │                  └──────────────────────────────┘   │
-│             │                                                     │
-│             │                  ┌──────────────────────────────┐   │
-│             └──────────────────│   Tauri Desktop App (GUI)    │   │
-│                                │  - QR auth display           │   │
-│                                │  - Settings configuration    │   │
-│                                │  - Permission editor         │   │
-│                                │  - Activity log              │   │
-│                                └──────────────────────────────┘   │
+│  │   WhatsApp Layer    │      │    Tauri Desktop App (Rust)   │   │
+│  │   (Go Bridge)       │─────▶│                               │   │
+│  │   - whatsmeow       │      │  ┌─────────────────────────┐  │   │
+│  │   - SQLite store    │      │  │  LLM Providers (Rust)   │  │   │
+│  │   - REST API :8080  │      │  │  - Ollama (live list)   │  │   │
+│  └──────────┬──────────┘      │  │  - Claude               │  │   │
+│             │                 │  │  - Groq / Grok / Gemini │  │   │
+│             │                 │  └─────────────────────────┘  │   │
+│             │                 │                               │   │
+│             │                 │  ┌─────────────────────────┐  │   │
+│   ┌─────────▼──────────┐     │  │  Permission Engine       │  │   │
+│   │  SQLite (Messages)  │◀────│  │  - 3 risk profiles      │  │   │
+│   │  (Rust reads dir.)  │     │  │  - reCAPTCHA + Image-txt│  │   │
+│   └─────────────────────┘     │  └─────────────────────────┘  │   │
+│                               │                               │   │
+│                               │  ┌─────────────────────────┐  │   │
+│                               │  │  Action Engine (Rust)    │  │   │
+│                               │  │  - Shell via Command     │  │   │
+│                               │  │  - macOS: osascript      │  │   │
+│                               │  │  - Volume / Media        │  │   │
+│                               │  │  - File scanner          │  │   │
+│                               │  │  - Undo journal          │  │   │
+│                               │  └─────────────────────────┘  │   │
+│                               │                               │   │
+│                               │  ┌─────────────────────────┐  │   │
+│                               │  │  Frontend (Svelte/HTML)  │  │   │
+│                               │  │  - Dashboard            │  │   │
+│                               │  │  - Provider config      │  │   │
+│                               │  │  - Permissions editor   │  │   │
+│                               │  │  - Action log           │  │   │
+│                               │  └─────────────────────────┘  │   │
+│                               └──────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
 ## Quick Start
 
 ### Prerequisites
-- Go
-- Python 3.11+
-- Node.js 20+ (for Tauri desktop app)
-- Rust (for Tauri)
-- FFmpeg (optional, for audio)
+- **Go** (for WhatsApp bridge)
+- **Node.js 20+** + **Rust** (for Tauri desktop app)
+- **FFmpeg** (optional — for audio messages)
 
-### Setup
+**Python is NOT required.**
+
+### Setup (30 seconds)
 
 ```bash
-# 1. Start the WhatsApp bridge
-cd whatsapp-bridge && go run main.go
+# One-command setup — installs everything
+chmod +x setup.sh && ./setup.sh
+
+# Or manually:
+make setup
+```
+
+### Run
+
+```bash
+# Terminal 1: Start WhatsApp bridge
+make bridge
 # Scan QR code with WhatsApp mobile app
 
-# 2. Start the orchestrator (in another terminal)
-cd orchestrator && python main.py
-
-# 3. Start the desktop app (in another terminal)
-cd desktop-app && npm install && npm run tauri dev
+# Terminal 2: Start desktop app
+make desktop
 ```
 
 ### Configuring LLM Providers
 
-Edit `orchestrator/config.yaml` or use the desktop GUI:
+Set environment variables OR configure in the desktop app GUI:
 
-```yaml
-providers:
-  ollama:
-    enabled: true
-    endpoint: http://localhost:11434
-    model: llama3
-  claude:
-    enabled: true
-    api_key: ${ANTHROPIC_API_KEY}
-    model: claude-sonnet-4-20250514
-  groq:
-    enabled: false
-    api_key: ${GROQ_API_KEY}
-  gemini:
-    enabled: false
-    api_key: ${GEMINI_API_KEY}
+```bash
+# Ollama (default — works out of the box)
+export OLLAMA_ENDPOINT=http://localhost:11434
+
+# Claude
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# Groq
+export GROQ_API_KEY=gsk-...
+
+# Grok (xAI)
+export XAI_API_KEY=...
+
+# Gemini
+export GEMINI_API_KEY=...
 ```
 
 ## Permission System
