@@ -155,21 +155,19 @@ jobs:
     needs: [build-macos, build-windows, build-linux]
     runs-on: ubuntu-latest
     if: github.event_name == 'release'
+    permissions:
+      contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
           pattern: whatszara-*
           merge-multiple: true
+          path: artifacts
 
       - name: Upload to release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # Upload app bundles
-          find . -type f \( -name "*.dmg" -o -name "*.msi" -o -name "*.exe" \
-            -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \
-            -o -name "*.tar.gz" -o -name "*.zip" \) -exec gh release upload \
-            "${{ github.event.release.tag_name }}" {} \;
-          # Upload Go bridge binaries
-          find . -path "*/bin/whatsapp-bridge-*" -type f -exec gh release upload \
-            "${{ github.event.release.tag_name }}" {} \;
+          gh release upload "${{ github.event.release.tag_name }}" \
+            $(find artifacts -type f) \
+            --repo "${{ github.repository }}" --clobber
