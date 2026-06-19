@@ -72,6 +72,8 @@ pub struct WhatszaraOrchestrator {
     pub actions_journal: ActionJournal,
     pending_actions: Vec<PendingAction>,
     action_counter: u64,
+    pub auto_read_enabled: bool,
+    pub last_rowid: i64,
 }
 
 impl WhatszaraOrchestrator {
@@ -83,6 +85,8 @@ impl WhatszaraOrchestrator {
             actions_journal: ActionJournal::new(1000),
             pending_actions: Vec::new(),
             action_counter: 0,
+            auto_read_enabled: false,
+            last_rowid: 0,
         }
     }
 
@@ -384,6 +388,14 @@ impl WhatszaraOrchestrator {
         }
     }
 
+    pub fn start_auto_read(&mut self) {
+        self.auto_read_enabled = true;
+    }
+
+    pub fn stop_auto_read(&mut self) {
+        self.auto_read_enabled = false;
+    }
+
     pub fn status(&self) -> serde_json::Value {
         let names = self.providers.list_names();
         let active = names.get(self.providers.active).cloned();
@@ -393,6 +405,8 @@ impl WhatszaraOrchestrator {
             "journal_entries": self.actions_journal.len(),
             "reversible_actions": self.actions_journal.reversible().len(),
             "policy": self.policy.to_json(),
+            "auto_read_enabled": self.auto_read_enabled,
+            "last_rowid": self.last_rowid,
         })
     }
 }

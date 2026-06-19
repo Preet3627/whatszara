@@ -131,6 +131,7 @@ async function pollBridge() {
   } catch {
     updateBridgeUI({ status: "error", error: "Failed to check bridge status" });
   }
+  refreshAutoReadStatus();
 }
 
 let lastQrCode = "";
@@ -212,6 +213,40 @@ function updateBridgeUI(status) {
   if (logoutDiv) logoutDiv.classList.toggle("hidden", status.status !== "connected");
 }
 
+// ── Auto-Read ──
+async function toggleAutoRead(enabled) {
+  if (enabled) {
+    await invoke("start_auto_read");
+  } else {
+    await invoke("stop_auto_read");
+  }
+}
+
+async function refreshAutoReadStatus() {
+  try {
+    const raw = await invoke("get_auto_read_status");
+    const status = JSON.parse(raw);
+    const pill = document.getElementById("auto-read-pill");
+    const toggle = document.getElementById("auto-read-toggle");
+    const statusText = document.getElementById("auto-read-status");
+    if (pill) {
+      pill.textContent = status.enabled ? "Running" : "Off";
+      pill.className = "pill" + (status.enabled ? " pill-active" : "");
+    }
+    if (toggle && toggle.checked !== status.enabled) {
+      toggle.checked = status.enabled;
+    }
+    if (statusText) {
+      statusText.textContent = `Last rowid: ${status.last_rowid || 0}`;
+    }
+  } catch {}
+}
+
+document.getElementById("auto-read-toggle")?.addEventListener("change", async (e) => {
+  await toggleAutoRead(e.target.checked);
+  refreshAutoReadStatus();
+});
+
 // ── Dashboard ──
 async function refreshDashboard() {
   try {
@@ -219,8 +254,14 @@ async function refreshDashboard() {
     const status = JSON.parse(raw);
     document.getElementById("llm-status").textContent = status.active_provider || "none";
     document.getElementById("actions-count").textContent = status.journal_entries || 0;
+    // Update auto-read toggle from status
+    const toggle = document.getElementById("auto-read-toggle");
+    if (toggle && toggle.checked !== status.auto_read_enabled) {
+      toggle.checked = status.auto_read_enabled;
+    }
   } catch {}
   pollBridge();
+  refreshAutoReadStatus();
 }
 
 // ── Policy Management (Contacts Table) ──

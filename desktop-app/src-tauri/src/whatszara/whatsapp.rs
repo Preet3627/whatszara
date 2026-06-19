@@ -26,6 +26,7 @@ pub struct Message {
     pub content: String,
     pub timestamp: String,
     pub media_type: Option<String>,
+    pub is_from_me: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -97,7 +98,7 @@ pub fn list_chats(limit: usize) -> Result<Vec<Chat>, String> {
 pub fn list_messages(chat_jid: &str, limit: usize) -> Result<Vec<Message>, String> {
     let conn = connect()?;
     let mut stmt = conn
-        .prepare("SELECT id, chat_jid, sender, content, timestamp, media_type FROM messages WHERE chat_jid = ?1 ORDER BY timestamp ASC LIMIT ?2")
+        .prepare("SELECT id, chat_jid, sender, content, timestamp, media_type, is_from_me FROM messages WHERE chat_jid = ?1 ORDER BY timestamp ASC LIMIT ?2")
         .map_err(|e| e.to_string())?;
     let rows = stmt
         .query_map(rusqlite::params![chat_jid, limit as i64], |row| {
@@ -108,6 +109,7 @@ pub fn list_messages(chat_jid: &str, limit: usize) -> Result<Vec<Message>, Strin
                 content: row.get(3)?,
                 timestamp: row.get(4)?,
                 media_type: row.get(5)?,
+                is_from_me: row.get::<_, bool>(6)?,
             })
         })
         .map_err(|e| e.to_string())?;
@@ -116,6 +118,41 @@ pub fn list_messages(chat_jid: &str, limit: usize) -> Result<Vec<Message>, Strin
         msgs.push(row.map_err(|e| e.to_string())?);
     }
     Ok(msgs)
+}
+
+pub fn get_new_incoming_messages_since(rowid: i64, limit: usize) -> Result<Vec<Message>, String> {
+    let conn = connect()?;
+    let mut stmt = conn
+        .prepare("SELECT id, chat_jid, sender, content, timestamp, media_type, is_from_me FROM messages WHERE rowid > ?1 AND is_from_me = 0 ORDER BY rowid ASC LIMIT ?2")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(rusqlite::params![rowid, limit as i64], |row| {
+            Ok(Message {
+                id: row.get(0)?,
+                chat_jid: row.get(1)?,
+                sender: row.get(2)?,
+                content: row.get(3)?,
+                timestamp: row.get(4)?,
+                media_type: row.get(5)?,
+                is_from_me: row.get::<_, bool>(6)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+    let mut msgs = Vec::new();
+    for row in rows {
+        msgs.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(msgs)
+}
+
+pub fn get_max_incoming_rowid() -> Result<i64, String> {
+    let conn = connect()?;
+    conn.query_row(
+        "SELECT COALESCE(MAX(rowid), 0) FROM messages WHERE is_from_me = 0",
+        [],
+        |row| row.get(0),
+    )
+    .map_err(|e| e.to_string())
 }
 
 pub fn list_all_contacts() -> Result<Vec<ContactInfo>, String> {

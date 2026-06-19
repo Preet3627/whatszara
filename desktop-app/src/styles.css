@@ -447,6 +447,12 @@ p { line-height: 1.55; }
   font-weight: 720;
 }
 
+.pill-active {
+  border-color: var(--green);
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 12%, transparent);
+}
+
 .setup-list {
   padding-left: 18px;
   line-height: 1.8;

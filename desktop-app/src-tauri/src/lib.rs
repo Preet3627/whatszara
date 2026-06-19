@@ -9,7 +9,7 @@ use whatszara::orchestrator::WhatszaraOrchestrator;
 use whatszara::policy::ContactMode;
 use tokio::sync::Mutex;
 
-struct OrchestratorState(Mutex<WhatszaraOrchestrator>);
+struct OrchestratorState(Arc<Mutex<WhatszaraOrchestrator>>);
 struct BridgeProcess {
     child: StdMutex<Option<Child>>,
     qr_code: StdMutex<String>,
@@ -18,9 +18,32 @@ struct BridgeProcess {
 }
 
 #[tauri::command]
-fn get_status(state: tauri::State<OrchestratorState>) -> Result<String, String> {
-    let orch = state.0.blocking_lock();
+async fn get_status(state: tauri::State<'_, OrchestratorState>) -> Result<String, String> {
+    let orch = state.0.lock().await;
     Ok(orch.status().to_string())
+}
+
+#[tauri::command]
+async fn start_auto_read(state: tauri::State<'_, OrchestratorState>) -> Result<String, String> {
+    let mut orch = state.0.lock().await;
+    orch.start_auto_read();
+    Ok(serde_json::json!({"success": true}).to_string())
+}
+
+#[tauri::command]
+async fn stop_auto_read(state: tauri::State<'_, OrchestratorState>) -> Result<String, String> {
+    let mut orch = state.0.lock().await;
+    orch.stop_auto_read();
+    Ok(serde_json::json!({"success": true}).to_string())
+}
+
+#[tauri::command]
+async fn get_auto_read_status(state: tauri::State<'_, OrchestratorState>) -> Result<String, String> {
+    let orch = state.0.lock().await;
+    Ok(serde_json::json!({
+        "enabled": orch.auto_read_enabled,
+        "last_rowid": orch.last_rowid,
+    }).to_string())
 }
 
 #[tauri::command]
@@ -447,9 +470,11 @@ pub fn run() {
         }
     }
 
+    let orch_arc = Arc::new(Mutex::new(orch));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .manage(OrchestratorState(Mutex::new(orch)))
+        .manage(OrchestratorState(orch_arc))
         .manage(Arc::new(BridgeProcess {
             child: StdMutex::new(None),
             qr_code: StdMutex::new(String::new()),
@@ -458,6 +483,9 @@ pub fn run() {
         }))
         .invoke_handler(tauri::generate_handler![
             get_status,
+            start_auto_read,
+            stop_auto_read,
+            get_auto_read_status,
             process_message,
             handle_action,
             undo_last,
@@ -486,6 +514,95 @@ pub fn run() {
             reject_action,
         ])
         .setup(|app| {
+            let auto_read_orch = app.state::<OrchestratorState>().0.clone();
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Runtime::new().expect("Failed to create auto-read runtime");
+                rt.block_on(async {
+                    use whatszara::whatsapp;
+                    use std::time::Duration;
+
+                    loop {
+                        let should_run = {
+                            let orch = auto_read_orch.lock().await;
+                            orch.auto_read_enabled
+                        };
+
+                        if should_run {
+                            let current_rowid = {
+                                let orch = auto_read_orch.lock().await;
+                                orch.last_rowid
+                            };
+
+                            if current_rowid == 0 {
+                                if let Ok(max_rowid) = whatsapp::get_max_incoming_rowid() {
+                                    let mut orch = auto_read_orch.lock().await;
+                                    orch.last_rowid = max_rowid;
+                                }
+                            } else if let Ok(messages) = whatsapp::get_new_incoming_messages_since(current_rowid, 20) {
+                                let mut to_process = Vec::new();
+                                {
+                                    let orch = auto_read_orch.lock().await;
+                                    for msg in &messages {
+                                        let contact = if msg.chat_jid.contains("@g.us") {
+                                            msg.sender.as_str()
+                                        } else {
+                                            msg.chat_jid.as_str()
+                                        };
+                                        if !orch.policy.is_allowed(contact) {
+                                            continue;
+                                        }
+                                        let mode = orch.policy.get_contact_mode(contact);
+                                        if matches!(mode, whatszara::policy::ContactMode::Blocked) {
+                                            continue;
+                                        }
+                                        to_process.push((contact.to_string(), msg.content.clone()));
+                                    }
+                                }
+
+                                for (contact, content) in &to_process {
+                                    let result = {
+                                        let mut orch = auto_read_orch.lock().await;
+                                        if !orch.auto_read_enabled {
+                                            break;
+                                        }
+                                        orch.process_message(content, contact).await
+                                    };
+
+                                    if let Ok(json) = &result {
+                                        if let Some(reply) = json["content"].as_str() {
+                                            if !reply.is_empty() && reply != "No response" {
+                                                let client = reqwest::Client::builder()
+                                                    .timeout(Duration::from_secs(10))
+                                                    .build();
+                                                if let Ok(client) = client {
+                                                    let payload = serde_json::json!({
+                                                        "recipient": contact,
+                                                        "message": reply
+                                                    });
+                                                    let mut req = client.post("http://localhost:8080/api/send")
+                                                        .json(&payload);
+                                                    if let Ok(key) = std::env::var("API_KEY") {
+                                                        req = req.header("Authorization", format!("Bearer {}", key));
+                                                    }
+                                                    let _ = req.send().await;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if let Ok(max_rowid) = whatsapp::get_max_incoming_rowid() {
+                                    let mut orch = auto_read_orch.lock().await;
+                                    orch.last_rowid = max_rowid;
+                                }
+                            }
+                        }
+
+                        tokio::time::sleep(Duration::from_secs(5)).await;
+                    }
+                });
+            });
+
             #[cfg(desktop)]
             {
                 // Determine bridge binary, args, and working directory
