@@ -339,16 +339,50 @@ document.getElementById("chat-contact-list")?.addEventListener("click", async (e
   selectedChatJid = item.dataset.jid;
   renderChatContacts(chatContacts);
   const name = item.querySelector(".contact-name")?.textContent || selectedChatJid;
+  const isAllowlisted = chatAllowlist.includes(selectedChatJid);
   document.getElementById("chat-contact-name").textContent = name;
   document.getElementById("chat-contact-jid").textContent = selectedChatJid;
   document.getElementById("chat-placeholder").classList.add("hidden");
   document.getElementById("chat-conversation").classList.remove("hidden");
+  const replyArea = document.getElementById("chat-reply-area");
+  if (replyArea) replyArea.classList.toggle("hidden", !isAllowlisted);
+  lastMessageCount = 0;
   await loadMessages(selectedChatJid);
 });
 
 document.getElementById("chat-refresh")?.addEventListener("click", async () => {
   await refreshChatContacts();
   if (selectedChatJid) await loadMessages(selectedChatJid);
+});
+
+async function sendAIReply() {
+  const input = document.getElementById("chat-reply-input");
+  const text = input?.value.trim();
+  if (!text || !selectedChatJid) return;
+  input.value = "";
+  input.disabled = true;
+  const sendBtn = document.getElementById("chat-reply-send");
+  if (sendBtn) sendBtn.disabled = true;
+  try {
+    const raw = await invoke("send_reply", { jid: selectedChatJid, message: text });
+    const result = JSON.parse(raw);
+    if (result.reply) {
+      await loadMessages(selectedChatJid);
+    }
+  } catch (e) {
+    console.error("Reply failed", e);
+  }
+  input.disabled = false;
+  if (sendBtn) sendBtn.disabled = false;
+  input.focus();
+}
+
+document.getElementById("chat-reply-send")?.addEventListener("click", sendAIReply);
+document.getElementById("chat-reply-input")?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendAIReply();
+  }
 });
 
 let lastMessageCount = 0;

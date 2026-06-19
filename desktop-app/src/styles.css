@@ -498,6 +498,33 @@ select, input[type="text"], input[type="password"] {
   color: rgba(255,255,255,0.7);
 }
 
+.chat-reply-area {
+  display: flex;
+  gap: 8px;
+  padding: 12px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  align-items: flex-end;
+}
+.chat-reply-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  font-family: inherit;
+  resize: none;
+  outline: none;
+}
+.chat-reply-input:focus {
+  border-color: var(--accent);
+}
+.chat-reply-area .btn-small {
+  flex-shrink: 0;
+}
+
 .chat-actions-section {
   border-top: 1px solid var(--border);
   padding: 16px 24px;

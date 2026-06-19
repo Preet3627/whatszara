@@ -64,6 +64,33 @@ async fn list_models(state: tauri::State<'_, OrchestratorState>) -> Result<Strin
 }
 
 #[tauri::command]
+async fn send_reply(
+    state: tauri::State<'_, OrchestratorState>,
+    jid: String,
+    message: String,
+) -> Result<String, String> {
+    let content = {
+        let orch = state.0.lock().await;
+        let result = orch.process_message(&message, &jid).await.map_err(|e| e.to_string())?;
+        result["content"].as_str().unwrap_or("No response").to_string()
+    };
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let payload = serde_json::json!({ "recipient": jid, "message": content });
+    let resp = client.post("http://localhost:8080/api/send")
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| format!("Bridge send failed: {}", e))?;
+    if !resp.status().is_success() {
+        return Ok(serde_json::json!({"success": false, "error": "Bridge rejected send", "reply": content}).to_string());
+    }
+    Ok(serde_json::json!({"success": true, "reply": content}).to_string())
+}
+
+#[tauri::command]
 async fn set_active_provider(state: tauri::State<'_, OrchestratorState>, name: String) -> Result<String, String> {
     let mut orch = state.0.lock().await;
     match orch.providers.set_active(&name) {
@@ -306,6 +333,7 @@ pub fn run() {
             update_contact_mode,
             check_bridge,
             logout_bridge,
+            send_reply,
             list_contacts,
             list_messages,
         ])
