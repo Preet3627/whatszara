@@ -141,10 +141,94 @@ chmod +x setup.sh && ./setup.sh
 make setup
 ```
 
-### Run
+### First-Run Setup Guide
+
+The desktop app automatically starts the WhatsApp bridge when it launches — no separate terminal needed.
+
+#### 1. Launch the App
 
 ```bash
-# Terminal 1: Start WhatsApp bridge
+make desktop
+```
+
+This builds and starts the Tauri desktop app. On first launch, the **Setup Wizard** on the dashboard will show:
+
+```
+┌─ Setup Wizard ──────────────────────────────────┐
+│                                                  │
+│  ⟳  WhatsApp Bridge — Starting...               │
+│  ○  LLM Provider                                │
+│  ○  Allowlist Your JID                          │
+│                                                  │
+└──────────────────────────────────────────────────┘
+```
+
+#### 2. Bridge Starts Automatically
+
+The app spawns `go run main.go` in the `whatsapp-bridge/` directory. The wizard updates in real-time:
+
+| Status | What it means |
+|--------|---------------|
+| **⟳ Running** | Bridge process is live, waiting for WhatsApp connection |
+| **✓ Connected** | Bridge is connected to WhatsApp (REST API at :8080 is responding) |
+| **✕ Error** | Bridge failed to start — check Go installation or see error details |
+
+#### 3. Scan the QR Code
+
+When the bridge starts for the first time, it prints a **QR code in the terminal** where you launched `make desktop`. Open WhatsApp on your phone → **Linked Devices** → **Link a Device** → scan the QR code.
+
+> The QR code only appears in the terminal. A future update will render it inside the app.
+
+#### 4. Configure an LLM Provider
+
+Once the bridge status shows **Connected**, click **Go to Providers** in the setup wizard (or the Providers tab in the sidebar). Whatszara supports:
+
+```bash
+# Ollama (default — works out of the box, no API key needed)
+export OLLAMA_ENDPOINT=http://localhost:11434
+
+# Claude
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# Groq
+export GROQ_API_KEY=gsk-...
+
+# Grok (xAI)
+export XAI_API_KEY=...
+
+# Gemini
+export GEMINI_API_KEY=...
+```
+
+Set these in your shell before launching the app, or configure via the Settings tab in the GUI.
+
+#### 5. Allowlist Your WhatsApp Number
+
+Click **Go to Permissions** in the setup wizard. Add your WhatsApp JID (e.g., `1234567890@s.whatsapp.net`) to the allowlist. Only approved JIDs can control the assistant.
+
+**Important:** The bridge connects your WhatsApp account — your own number is `self` (already in the allowlist by default). Add other phone numbers to let them control the desktop too.
+
+#### 6. Send a Message
+
+Send a WhatsApp message to your own number. The bridge receives it, the LLM processes it, and the action engine executes it on your desktop.
+
+### Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| **Bridge shows "stopped"** | Ensure Go is installed: `go version` |
+| **Bridge shows "error"** | Click error details in the wizard, or run `cd whatsapp-bridge && go run main.go` manually in a terminal to see the error |
+| **"go: not found"** | Install Go from [go.dev](https://go.dev/dl/) and ensure it's in your PATH |
+| **QR code not showing** | Delete `whatsapp-bridge/store/` directory and restart the app |
+| **Bridge starts but can't connect** | Check your internet connection. The bridge needs WebSocket access to WhatsApp servers |
+| **Port 8080 already in use** | Stop the other service using port 8080, or change the bridge port in `main.go` |
+
+### Manual Bridge Start (alternative)
+
+If you prefer to run the bridge separately (e.g., for debugging):
+
+```bash
+# Terminal 1: Start WhatsApp bridge manually
 make bridge
 # Scan QR code with WhatsApp mobile app
 
