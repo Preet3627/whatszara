@@ -1,0 +1,170 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build"
+        required: true
+
+env:
+  CARGO_TERM_COLOR: always
+  APP_NAME: whatszara
+
+jobs:
+  build-macos:
+    name: Build macOS (Intel + Apple Silicon)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: |
+          brew install go python@3.11 ffmpeg
+          pip3 install uv
+
+      - name: Build Go bridge
+        run: |
+          cd whatsapp-bridge
+          go build -o ../desktop-app/src-tauri/bin/whatsapp-bridge-darwin .
+
+      - name: Build Tauri app (universal)
+        run: |
+          cd desktop-app
+          npm install
+          npm run tauri build -- --target universal-apple-darwin
+
+      - name: Create DMG
+        run: |
+          cd desktop-app/src-tauri/target/universal-apple-darwin/release/bundle/dmg
+          echo "DMG ready"
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: whatszara-macos
+          path: |
+            desktop-app/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            desktop-app/src-tauri/bin/
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build Go bridge
+        shell: pwsh
+        run: |
+          cd whatsapp-bridge
+          $env:CGO_ENABLED=1
+          go build -o ../desktop-app/src-tauri/bin/whatsapp-bridge-windows.exe .
+
+      - name: Install Tauri deps (Windows)
+        shell: pwsh
+        run: |
+          npm install -g @tauri-apps/cli
+
+      - name: Build Tauri app
+        shell: pwsh
+        run: |
+          cd desktop-app
+          npm install
+          npm run tauri build
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: whatszara-windows
+          path: |
+            desktop-app/src-tauri/target/release/*.msi
+            desktop-app/src-tauri/target/release/*.exe
+            desktop-app/src-tauri/bin/
+
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libgtk-3-dev libsoup-3.0-dev \
+            libjavascriptcoregtk-4.1-dev libasound2-dev
+
+      - name: Build Go bridge
+        run: |
+          cd whatsapp-bridge
+          go build -o ../desktop-app/src-tauri/bin/whatsapp-bridge-linux .
+
+      - name: Build Tauri app
+        run: |
+          cd desktop-app
+          npm install
+          npm run tauri build
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: whatszara-linux
+          path: |
+            desktop-app/src-tauri/target/release/bundle/**/*
+            desktop-app/src-tauri/bin/
+
+  attach-to-release:
+    name: Attach artifacts to release
+    needs: [build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: whatszara-*
+          merge-multiple: true
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for file in *.{dmg,msi,exe,deb,rpm,AppImage,tar.gz,zip}; do
+            if [ -f "$file" ]; then
+              gh release upload "${{ github.event.release.tag_name }}" "$file"
+            fi
+          done
