@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LLMMessage {
@@ -342,6 +341,7 @@ impl ProviderRegistry {
         Err(format!("Provider '{}' not found", provider))
     }
 
+    #[allow(dead_code)]
     pub fn current_model_of(&self, provider: &str) -> Option<String> {
         self.providers.iter().find(|p| p.name() == provider).map(|p| p.current_model().to_string())
     }

@@ -78,6 +78,7 @@ impl ActionJournal {
         self.entries.iter().rev().find(|e| e.action_id == action_id)
     }
 
+    #[allow(dead_code)]
     pub fn recent(&self, limit: usize) -> Vec<&ActionEntry> {
         self.entries.iter().rev().take(limit).collect()
     }

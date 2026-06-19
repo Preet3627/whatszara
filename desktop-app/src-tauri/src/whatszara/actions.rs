@@ -11,6 +11,7 @@ pub struct ActionResult {
 }
 
 impl ActionResult {
+    #[allow(dead_code)]
     pub fn ok(action: &str, output: &str) -> Self {
         Self { success: true, output: output.to_string(), error: String::new(), action: action.to_string(), params: std::collections::HashMap::new() }
     }
@@ -168,6 +169,7 @@ impl MediaController {
 pub struct DesktopScanner;
 
 impl DesktopScanner {
+    #[allow(dead_code)]
     pub async fn list_files(path: Option<&str>) -> ActionResult {
         let search_path = path.unwrap_or("~/Desktop");
         let expanded = shellexpand::tilde(search_path).to_string();
