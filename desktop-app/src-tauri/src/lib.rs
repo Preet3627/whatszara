@@ -1,11 +1,14 @@
 mod whatszara;
 
+use std::process::{Command, Child, Stdio};
+use std::sync::Mutex as StdMutex;
 use tauri::Manager;
 use whatszara::orchestrator::WhatszaraOrchestrator;
 use whatszara::policy::ContactMode;
 use tokio::sync::Mutex;
 
 struct OrchestratorState(Mutex<WhatszaraOrchestrator>);
+struct BridgeProcess(StdMutex<Option<Child>>);
 
 #[tauri::command]
 fn get_status(state: tauri::State<OrchestratorState>) -> Result<String, String> {
@@ -79,8 +82,6 @@ fn search_contacts(query: String) -> Result<String, String> {
     }
 }
 
-// ── Policy management commands ──
-
 #[tauri::command]
 fn get_policy(state: tauri::State<OrchestratorState>) -> Result<String, String> {
     let orch = state.0.blocking_lock();
@@ -137,6 +138,49 @@ async fn update_contact_mode(
     Ok(serde_json::json!({ "success": true }).to_string())
 }
 
+#[tauri::command]
+async fn check_bridge(state: tauri::State<'_, BridgeProcess>) -> Result<String, String> {
+    let alive = {
+        let mut guard = state.0.lock().unwrap();
+        if guard.is_none() {
+            return Ok(serde_json::json!({"status": "stopped"}).to_string());
+        }
+        let mut child = guard.take().unwrap();
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                return Ok(serde_json::json!({
+                    "status": "error",
+                    "error": format!("Bridge exited with code {:?}", status.code())
+                }).to_string());
+            }
+            Ok(None) => {
+                *guard = Some(child);
+                true
+            }
+            Err(e) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Ok(serde_json::json!({
+                    "status": "error",
+                    "error": e.to_string()
+                }).to_string());
+            }
+        }
+    };
+
+    if alive {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(3))
+            .build()
+            .map_err(|e| e.to_string())?;
+        let connected = client.get("http://localhost:8080/api/send").send().await.is_ok();
+        let status = if connected { "connected" } else { "running" };
+        Ok(serde_json::json!({"status": status}).to_string())
+    } else {
+        Ok(serde_json::json!({"status": "stopped"}).to_string())
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut orch = WhatszaraOrchestrator::new();
@@ -146,6 +190,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .manage(OrchestratorState(Mutex::new(orch)))
+        .manage(BridgeProcess(StdMutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             get_status,
             process_message,
@@ -160,10 +205,36 @@ pub fn run() {
             update_permissions,
             update_allowlist,
             update_contact_mode,
+            check_bridge,
         ])
         .setup(|app| {
             #[cfg(desktop)]
             {
+                let bridge_dir = app.path().resource_dir()
+                    .map(|p| p.join("../../whatsapp-bridge"))
+                    .unwrap_or_else(|_| std::path::PathBuf::from("../whatsapp-bridge"));
+
+                let bridge_path = if cfg!(debug_assertions) {
+                    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                        .join("../../whatsapp-bridge")
+                        .canonicalize()
+                        .unwrap_or(bridge_dir.clone())
+                } else {
+                    bridge_dir
+                };
+
+                if bridge_path.join("main.go").exists() {
+                    let child = Command::new("go")
+                        .args(["run", "main.go"])
+                        .current_dir(&bridge_path)
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .spawn()
+                        .ok();
+                    let state = app.state::<BridgeProcess>();
+                    *state.0.lock().unwrap() = child;
+                }
+
                 use tauri::tray::{TrayIconBuilder, TrayIconEvent};
                 let _tray = TrayIconBuilder::new()
                     .tooltip("Whatszara")

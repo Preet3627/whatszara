@@ -26,24 +26,99 @@ async function invoke(cmd, args = {}) {
   return JSON.stringify({ success: false, error: "Not running in Tauri" });
 }
 
+// ── Bridge Polling ──
+let bridgePollInterval = null;
+
+async function pollBridge() {
+  try {
+    const raw = await invoke("check_bridge");
+    const result = JSON.parse(raw);
+    updateBridgeUI(result);
+  } catch {
+    updateBridgeUI({ status: "error", error: "Failed to check bridge status" });
+  }
+}
+
+function updateBridgeUI(status) {
+  const badge = document.getElementById("status-badge");
+  const indicator = document.getElementById("bridge-indicator");
+  const spinner = document.getElementById("bridge-spinner");
+  const icon = document.getElementById("bridge-icon");
+  const statusText = document.getElementById("bridge-status-text");
+  const errorDetail = document.getElementById("bridge-error-detail");
+  const waStatus = document.getElementById("wa-status");
+
+  const stepBridge = document.getElementById("step-bridge");
+  const stepProvider = document.getElementById("step-provider");
+  const stepAllowlist = document.getElementById("step-allowlist");
+
+  // Update sidebar badge
+  if (badge) {
+    const labels = { stopped: "stopped", running: "starting…", connected: "connected", error: "error" };
+    badge.textContent = labels[status.status] || status.status;
+    badge.classList.toggle("connected", status.status === "connected");
+    badge.classList.toggle("error", status.status === "error");
+  }
+
+  // Update WhatsApp status stat
+  if (waStatus) {
+    const labels = { stopped: "Bridge Stopped", running: "Connecting…", connected: "Connected", error: "Bridge Error" };
+    waStatus.textContent = labels[status.status] || "Unknown";
+    waStatus.style.color = status.status === "connected" ? "var(--green)" : status.status === "error" ? "var(--red)" : "var(--yellow)";
+  }
+
+  // Update step indicator
+  if (indicator) {
+    indicator.className = "step-indicator";
+    indicator.classList.add(`step-${status.status}`);
+  }
+  if (spinner) spinner.classList.toggle("hidden", status.status !== "running" && status.status !== "starting");
+  if (icon) {
+    const showIcon = status.status !== "running" && status.status !== "starting";
+    icon.classList.toggle("hidden", !showIcon);
+    if (showIcon) {
+      const icons = { stopped: "✕", connected: "✓", error: "✕" };
+      icon.textContent = icons[status.status] || "?";
+    }
+  }
+
+  // Status text
+  if (statusText) {
+    const texts = {
+      stopped: "Bridge is not running. Try restarting the app.",
+      running: "Bridge process is running. Waiting for WhatsApp connection… (scan the QR code in the terminal)",
+      connected: "Bridge is connected to WhatsApp!",
+      error: `Bridge failed: ${status.error || "Unknown error"}`,
+    };
+    statusText.textContent = texts[status.status] || "Unknown status";
+  }
+
+  // Error detail
+  if (errorDetail) {
+    if (status.status === "error" && status.error) {
+      errorDetail.textContent = status.error;
+      errorDetail.classList.remove("hidden");
+    } else {
+      errorDetail.classList.add("hidden");
+    }
+  }
+
+  // Step progression
+  if (stepBridge) stepBridge.classList.toggle("completed", status.status === "connected");
+  if (stepProvider) stepProvider.classList.toggle("active", status.status === "connected");
+}
+
 // ── Dashboard ──
 async function refreshDashboard() {
-  const badge = document.getElementById("status-badge");
   try {
     const raw = await invoke("get_status");
     const status = JSON.parse(raw);
     document.getElementById("llm-status").textContent = status.active_provider || "none";
     document.getElementById("actions-count").textContent = status.journal_entries || 0;
-    if (badge) {
-      badge.textContent = "connected";
-      badge.classList.add("connected");
-    }
   } catch {
-    if (badge) {
-      badge.textContent = "disconnected";
-      badge.classList.remove("connected");
-    }
+    // ignore
   }
+  pollBridge();
 }
 
 // ── Policy Management ──
@@ -143,6 +218,15 @@ document.getElementById("save-settings")?.addEventListener("click", () => {
   alert("Settings saved (local only for now)");
 });
 
+// ── Setup Wizard Nav ──
+document.querySelectorAll("#setup-wizard .btn[data-view]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const view = btn.dataset.view;
+    const navItem = document.querySelector(`.nav-item[data-view="${view}"]`);
+    if (navItem) navItem.click();
+  });
+});
+
 // ── Init ──
 window.addEventListener("DOMContentLoaded", () => {
   const saved = localStorage.getItem("whatszara-settings");
@@ -155,5 +239,11 @@ window.addEventListener("DOMContentLoaded", () => {
     if (document.getElementById("active-provider-select"))
       document.getElementById("active-provider-select").value = settings.activeProvider || "ollama";
   }
-  setTimeout(refreshDashboard, 1000);
+  pollBridge();
+  bridgePollInterval = setInterval(pollBridge, 3000);
+  setTimeout(refreshDashboard, 500);
+});
+
+window.addEventListener("beforeunload", () => {
+  if (bridgePollInterval) clearInterval(bridgePollInterval);
 });

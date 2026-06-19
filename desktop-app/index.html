@@ -48,14 +48,40 @@
             </div>
           </div>
           <div class="section">
-            <h3>Welcome to Whatszara</h3>
-            <p>Your desktop assistant controlled via WhatsApp + LLM.</p>
-            <ol class="setup-list">
-              <li>Start the WhatsApp bridge: <code>cd whatsapp-bridge && go run main.go</code></li>
-              <li>Configure an LLM provider in Providers tab</li>
-              <li>Add your WhatsApp JID to the allowlist in Permissions tab</li>
-              <li>Send a message to your WhatsApp number to control your desktop</li>
-            </ol>
+            <h3>Setup Wizard</h3>
+            <div id="setup-wizard">
+              <div class="setup-step" id="step-bridge">
+                <div class="step-indicator" id="bridge-indicator">
+                  <span class="spinner" id="bridge-spinner"></span>
+                  <span class="step-icon" id="bridge-icon"></span>
+                </div>
+                <div class="step-body">
+                  <h4>WhatsApp Bridge</h4>
+                  <p id="bridge-status-text">Starting bridge...</p>
+                  <pre id="bridge-error-detail" class="code-block hidden"></pre>
+                </div>
+              </div>
+              <div class="setup-step" id="step-provider">
+                <div class="step-indicator">
+                  <span class="step-icon" id="provider-icon">○</span>
+                </div>
+                <div class="step-body">
+                  <h4>LLM Provider</h4>
+                  <p id="provider-status-text">Configure an AI provider to handle your requests.</p>
+                  <button class="btn btn-small" data-view="providers">Go to Providers</button>
+                </div>
+              </div>
+              <div class="setup-step" id="step-allowlist">
+                <div class="step-indicator">
+                  <span class="step-icon" id="allowlist-icon">○</span>
+                </div>
+                <div class="step-body">
+                  <h4>Allowlist Your JID</h4>
+                  <p id="allowlist-status-text">Add your WhatsApp number to the allowlist so the assistant can respond.</p>
+                  <button class="btn btn-small" data-view="permissions">Go to Permissions</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
