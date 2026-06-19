@@ -1,5 +1,8 @@
 # Whatszara — Desktop Assistant via WhatsApp + LLM
 
+[![Docs](https://img.shields.io/badge/docs-whatszara-docs-25D366?style=flat-square)](https://github.com/Preet3627/whatszara-docs)
+[![GitHub](https://img.shields.io/github/license/Preet3627/whatszara?style=flat-square&color=25D366)](LICENSE)
+
 Control your desktop from anywhere using WhatsApp messages. Talk to an LLM through WhatsApp, and it executes your commands — shell, apps, media, file access — with a secure permission system.
 
 Built on top of **[whatsapp-mcp](https://github.com/lharries/whatsapp-mcp)** by Luke Harries, scaled from a simple MCP server into a full desktop automation platform.
@@ -213,6 +216,11 @@ Each allowed contact can be assigned a mode:
 
 This project is **MIT Licensed** (see [LICENSE](LICENSE)).
 
+© 2026 Preet3627 (Latestinssan).  
 The WhatsApp bridge and MCP server components incorporate code from
 [whatsapp-mcp](https://github.com/lharries/whatsapp-mcp) by Luke Harries,
 also MIT licensed. See [LICENSE-THIRD-PARTY](LICENSE-THIRD-PARTY) for attribution.
+
+## Documentation
+
+Full documentation site: **[github.com/Preet3627/whatszara-docs](https://github.com/Preet3627/whatszara-docs)**
