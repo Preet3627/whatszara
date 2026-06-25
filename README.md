@@ -8,6 +8,14 @@ Built on top of **[whatsapp-mcp](https://github.com/lharries/whatsapp-mcp)** by 
 
 **No Python required.** Everything is compiled into a single Tauri desktop app (Rust) + Go bridge for WhatsApp. No interpreters, no virtualenvs, no pip.
 
+
+## Demo
+
+[![Whatszara Demo](<img width="1212" height="832" alt="image" src="https://github.com/user-attachments/assets/5bb28c39-5c88-426f-926f-c4850248cd08" />
+)](https://youtu.be/q5R8a360aGs)
+
+
+
 ## How It Works
 
 ```
