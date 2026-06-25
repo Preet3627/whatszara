@@ -327,4 +327,4 @@ MIT Licensed. © 2026 Preet3627 (Latestinssan). The WhatsApp bridge incorporates
 
 ## Documentation
 
-Full docs site: **[github.com/Preet3627/whatszara-docs](https://github.com/Preet3627/whatszara-docs)**
+Full docs site: **[github.com/Preet3627/whatszara-docs](https://whatszara.vercel.app/)**
