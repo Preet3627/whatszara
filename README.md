@@ -11,8 +11,7 @@ Built on top of **[whatsapp-mcp](https://github.com/lharries/whatsapp-mcp)** by 
 
 ## Demo
 
-[![Whatszara Demo](<img width="1212" height="832" alt="image" src="https://github.com/user-attachments/assets/5bb28c39-5c88-426f-926f-c4850248cd08" />
-)](https://youtu.be/q5R8a360aGs)
+[![Whatszara Demo]()](https://youtu.be/q5R8a360aGs)
 
 
 
