@@ -35,6 +35,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["bin/whatsapp-bridge-darwin", "bin/whatsapp-bridge-windows.exe", "bin/whatsapp-bridge-linux"]
+    "resources": []
   }
 }
